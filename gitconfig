@@ -1,18 +1,23 @@
 [user]
 	name = Pawel Nowosielski
-	email = Pawel.Nowosielski@domain
+	email = Pawel.Nowosielski@domian
 
 [alias]
   o = checkout
   c = commit -am
   ca = commit -a --amend
+  cv = commit -a --fixup HEAD
+  xx = clean -fd
+  mx = checkout -- .
   s = status
   b = branch
+  asq = rebase -i --autosquash
   p = pull
   l = log --color -10 --pretty=format:'%C(yellow)%h%Creset -%C(bold red)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
-  hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short
+  ll = log --name-status
+  hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short	
   whatidid = log --name-status HEAD^..HEAD
-
+  
 [push]
 	default = simple
 [core]
