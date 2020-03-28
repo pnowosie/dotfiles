@@ -1,0 +1,25 @@
+# Fo(rmat) Co(mpile)
+function foco () {
+  runtest mix format && \
+  runtest mix compile
+}
+
+# Fo(rmat) Co(mpile) (Cre)do
+function focodo () {
+  piggy 1
+  foco && \
+  runtest mix credo
+}
+
+# Am I ready to PR?
+function shippy() {
+  piggy 1
+  runtest mix do clean, compile --warnings-as-errors --force, format --check-formatted
+  runtest mix test --exclude test
+  runtest mix dialyzer
+}
+
+# deps.get & compile
+function mixer() {
+  mix do deps.get, compile
+}

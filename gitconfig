@@ -1,12 +1,13 @@
 [user]
 	name = Pawel Nowosielski
-	email = Pawel.Nowosielski@domian
+	email = Pawel.Nowosielski@domain
 
 [alias]
   o = checkout
   c = commit -am
   ca = commit -a --amend
   cv = commit -a --fixup HEAD
+  cfx = commit -a --fixup
   xx = clean -fd
   mx = checkout -- .
   s = status
@@ -22,7 +23,7 @@
 	default = simple
 [core]
 	excludesfile = ~/.gitignore
-	editor = code --wait
+	editor = vi
 
 [diff]
     tool = default-difftool
@@ -30,3 +31,4 @@
     cmd = code --wait --diff $LOCAL $REMOTE
 [gpg]
 	program = gpg2
+

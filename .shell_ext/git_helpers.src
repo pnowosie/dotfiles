@@ -1,0 +1,71 @@
+# Git helpers
+
+# Aliases
+alias g=git
+alias masta='git checkout master'
+alias mastaf='git clean -fd && git checkout -f master'
+
+# Simple aliases are defined in .gitconfig
+
+# Functions
+
+function currbranch() {
+  bl=`git branch | grep \*`
+
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    return $exit_code;
+  else 
+    echo "$bl" | cut -d ' ' -f2
+  fi
+}
+
+# am I on master?
+function onmaster() {
+    [[ $(currbranch) == "master" ]]
+    return
+}
+
+# std rebase feature branch onto master or just git pull on master
+function rebase() {
+    if onmaster; then
+        git pull
+        say $BLUE "ready on master"
+    else
+        branch=$(currbranch)
+        git checkout master
+        git pull
+        git checkout $branch
+        runtest git rebase master
+    fi
+}
+
+# Updates (resets) to the remote upstream branch potencially loosing local history
+function reset-to-upstream() {
+    if onmaster; then
+        say $RED "don't hard-reset MASTER, please!"
+    else
+        git fetch --all
+        git reset --hard origin/$(currbranch)
+    fi
+}
+
+# check whether working copy is up to date with upstream
+function curr() {
+    uptodate="Your branch is up to date"
+    git fetch
+    stan=`git status --ahead-behind`
+    echo $stan | grep $uptodate > /dev/null
+    local exit_code=$?
+ 
+    if [ $exit_code -eq 0 ]; then
+        echo "$fg[white]$uptodate$reset_color"
+    else
+        echo $stan
+    fi
+}
+
+# picks a current HEAD sha
+function hed() {
+  git log --color -1 --abbrev-commit --pretty=format:'%C(bold white)%h%Creset (%Cblue%an%Creset %Cgreen%cr%Creset) %C(bold white)*%Creset %C(bold)%s%Creset ' | tee
+}
