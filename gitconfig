@@ -23,7 +23,6 @@
 	default = simple
 [core]
 	excludesfile = ~/.gitignore
-	editor = vi
 
 [diff]
     tool = default-difftool

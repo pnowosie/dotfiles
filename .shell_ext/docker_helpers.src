@@ -1,0 +1,4 @@
+# Pass container id as an parameter
+function dockerbash() {
+  docker exec -it "$1" bash
+}
