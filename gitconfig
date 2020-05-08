@@ -5,7 +5,8 @@
 [alias]
   o = checkout
   c = commit -am
-  ca = commit -a --amend
+  ca = commit --amend
+  caa = commit -a --amend
   cv = commit -a --fixup HEAD
   cfx = commit -a --fixup
   xx = clean -fd

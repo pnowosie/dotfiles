@@ -69,3 +69,4 @@ function curr() {
 function hed() {
   git log --color -1 --abbrev-commit --pretty=format:'%C(bold white)%h%Creset (%Cblue%an%Creset %Cgreen%cr%Creset) %C(bold white)*%Creset %C(bold)%s%Creset ' | tee
 }
+
