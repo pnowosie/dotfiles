@@ -8,7 +8,7 @@ function foco () {
 function focodo () {
   piggy 1
   foco && \
-  runtest mix credo
+  runtest mix credo --ignore-checks Credo.Check.Readability.SinglePipe
 }
 
 # Am I ready to PR?
