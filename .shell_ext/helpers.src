@@ -2,6 +2,9 @@
 export VISUAL=vim
 export EDITOR=$VISUAL
 
+# Other tools
+export PIPENV_VENV_IN_PROJECT=1
+
 # Aliases
 alias e='emacs . &'
 
