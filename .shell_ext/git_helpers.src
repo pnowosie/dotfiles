@@ -4,6 +4,7 @@
 alias g=git
 alias masta='git checkout master'
 alias mastaf='git clean -fd && git checkout -f master'
+alias ltee='g l | tee'
 
 # Simple aliases are defined in .gitconfig
 
