@@ -43,3 +43,8 @@ mcd () {
     mkdir -p "$1"
     cd "$1"
 }
+
+# import custom aliases
+if [ -f ~/.shell_ext/aliases ]; then
+    . ~/.shell_ext/aliases
+fi
