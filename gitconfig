@@ -19,13 +19,15 @@
   ll = log --name-status
   hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short	
   whatidid = log --name-status HEAD^..HEAD
+  resign = "!re() { git rebase --exec 'git commit --amend --no-edit -n -S' -i $1; }; re"
   
 [push]
 	default = simple
 [pull]
-  rebase = true
+  ff = only
 [core]
 	excludesfile = ~/.gitignore
+	editor = vi
 
 [diff]
     tool = default-difftool
