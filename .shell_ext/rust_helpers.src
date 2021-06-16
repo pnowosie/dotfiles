@@ -1,0 +1,4 @@
+function cabu() {
+    runtest cargo fmt && \
+    runtest cargo build
+}
