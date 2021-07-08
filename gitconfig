@@ -20,6 +20,7 @@
   hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short	
   whatidid = log --name-status HEAD^..HEAD
   resign = "!re() { git rebase --exec 'git commit --amend --no-edit -n -S' -i $1; }; re"
+  df = "diff --staged"
   
 [push]
 	default = simple
