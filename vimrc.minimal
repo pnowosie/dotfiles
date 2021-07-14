@@ -1,0 +1,9 @@
+# Mimalistic .vimrc file for remote machines
+set nocompatible
+syntax on
+set rnu
+filetype indent plugin on
+colorscheme murphy
+
+set nocursorline
+nnoremap <silent> <F4> :set cursorline!<CR>
