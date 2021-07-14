@@ -1,4 +1,4 @@
-# Mimalistic .vimrc file for remote machines
+" Mimalistic .vimrc file for remote machines
 set nocompatible
 syntax on
 set rnu
