@@ -6,7 +6,7 @@ export EDITOR=$VISUAL
 export PIPENV_VENV_IN_PROJECT=1
 
 # Aliases
-# alias e='emacs . &'
+alias zid="date +'%Y%m%d%H%M'"
 # alias v='neovim'
 
 # alias l='exa -1'
