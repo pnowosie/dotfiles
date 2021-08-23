@@ -1,0 +1,18 @@
+diff --git a/autoload/vimwiki/markdown_base.vim b/autoload/vimwiki/markdown_base.vim
+index bfbd140..9e1c81a 100644
+--- a/autoload/vimwiki/markdown_base.vim
++++ b/autoload/vimwiki/markdown_base.vim
+@@ -126,8 +126,12 @@ function! s:normalize_link_syntax_v() abort
+     if vimwiki#base#is_diary_file(expand('%:p'))
+       let link = vimwiki#base#normalize_link_in_diary(visual_selection)
+     else
++      " Change ALL characters except alphabets, digits, hyphen, underscore or full stop into '-'
++      let url = substitute(visual_selection, '[^A-Za-z0-9_.]', '-', 'g')
++      " Change uppercase to lowercase
++      let url = substitute(url, '[A-Z]', '\L&', 'g')
+       let link = s:safesubstitute(vimwiki#vars#get_syntaxlocal('Weblink1Template'),
+-            \ '__LinkUrl__', visual_selection, '')
++            \ '__LinkUrl__', url, '')
+     endif
+ 
+     " replace spaces with new character if option is set
