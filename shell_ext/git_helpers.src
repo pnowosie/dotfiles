@@ -1,4 +1,5 @@
 # Git helpers
+GITHUB_SSH_KEY_PATH="${HOME}/.ssh/id_rsa"
 
 # Aliases
 alias g=git
@@ -70,5 +71,10 @@ function curr() {
 # picks a current HEAD sha
 function hed() {
   git log --color -1 --abbrev-commit --pretty=format:'%C(bold white)%h%Creset (%Cblue%an%Creset %Cgreen%cr%Creset) %C(bold white)*%Creset %C(bold)%s%Creset ' | tee
+}
+
+function ssh-agent-start() {
+  eval "$(ssh-agent -s)"
+  ssh-add "${GITHUB_SSH_KEY_PATH}" 
 }
 
