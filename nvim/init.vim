@@ -13,6 +13,7 @@ set wildmode=list:longest,full
 
 set autoindent
 set expandtab
+set nofoldenable
 set tabstop=4
 set shiftwidth=2
 
