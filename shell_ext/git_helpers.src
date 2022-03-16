@@ -73,6 +73,32 @@ function hed() {
   git log --color -1 --abbrev-commit --pretty=format:'%C(bold white)%h%Creset (%Cblue%an%Creset %Cgreen%cr%Creset) %C(bold white)*%Creset %C(bold)%s%Creset ' | tee
 }
 
+# switch branch based on part of the name
+function bb() {
+  branch=$(git branch | grep "$1")
+  if [[ $? != 0 ]]; then
+    echo "🚫 No branch matching the pattern"
+    return 1
+  fi
+
+  oneline=$(echo "${branch}" | wc -l | xargs)
+  if [[ $oneline != 1 ]]; then
+    echo "${branch}"
+    echo "👆 More than one possible branch"
+    return 2
+  fi
+
+  echo "${branch}" | grep "*"
+  if [[ $? == 0 ]]; then
+    echo "Already current branch"
+    return
+  fi
+
+  branch=$(echo "${branch}" | xargs)
+  echo "✅ Switching to branch: ${branch}"
+  git checkout ${branch}
+}
+
 function ssh-agent-start() {
   eval "$(ssh-agent -s)"
   ssh-add "${GITHUB_SSH_KEY_PATH}" 
