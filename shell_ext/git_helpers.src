@@ -3,10 +3,20 @@ GITHUB_SSH_KEY_PATH="${HOME}/.ssh/id_rsa"
 
 # Aliases
 alias g=git
-alias gad='g add . ; g s'
+alias gad='git add . ; git status'
 alias masta='git checkout master'
 alias mastaf='git clean -fd && git checkout -f master'
-alias ltee='g l | tee'
+alias ltee='git l | tee'
+
+# Branch clean up
+
+#[DOC]: Deletes local branches which already have been merged
+# You can exclude more patterns by `master|develop|release`
+alias rm-merged='git branch --merged | egrep -v "(^\*|master)" | xargs git branch -d'
+
+#[DOC]: Cleans up remote tracking branches
+alias rm-tracking='git remote prune origin'
+
 
 # Simple aliases are defined in .gitconfig
 
