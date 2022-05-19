@@ -1,4 +1,5 @@
 function cabu() {
-    runtest cargo fmt && \
-    runtest cargo build
+    runtest cargo check && \
+    runtest cargo clippy && \
+    runtest cargo fmt
 }

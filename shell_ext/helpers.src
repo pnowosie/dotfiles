@@ -1,19 +1,22 @@
 # Default text editor
-export VISUAL=vim
+export VISUAL=nvim
 export EDITOR=$VISUAL
 
 # Other tools
 export PIPENV_VENV_IN_PROJECT=1
+export ASDF_PYVER=$(asdf current python | tr -s ' ' | cut -d ' ' -f2)
 
 # Aliases
 alias zid="date +'%Y%m%d%H%M'"
-# alias v='neovim'
+alias vi='nvim'
 
 # alias l='exa -1'
 # alias ls='exa'
 # alias ll='exa -l'
 # alias la='exa -la'
 # alias tree='exa -tree'
+
+alias ranger="$HOME/.asdf/installs/python/${ASDF_PYVER}/bin/ranger"
 
 # Notifications
 
