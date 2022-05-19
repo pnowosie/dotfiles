@@ -4,23 +4,24 @@
 
 [alias]
   o = checkout
+  b = branch
+  s = status
   c = commit -am
   ca = commit --amend
   caa = commit -a --amend
   cv = commit -a --fixup HEAD
   cfx = commit -a --fixup
+  p = pull
+  d = diff
+  ds = "diff --staged"
   xx = clean -fd
   mx = checkout -- .
-  s = status
-  b = branch
   asq = rebase -i --autosquash
-  p = pull
   l = log --color -10 --pretty=format:'%C(yellow)%h%Creset -%C(bold red)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
   ll = log --name-status
   hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short	
   whatidid = log --name-status HEAD^..HEAD
   resign = "!re() { git rebase --exec 'git commit --amend --no-edit -n -S' -i $1; }; re"
-  df = "diff --staged"
   
 [push]
 	default = simple
