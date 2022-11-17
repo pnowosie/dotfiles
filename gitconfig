@@ -4,19 +4,19 @@
 
 [alias]
   o = checkout
-  b = branch
-  s = status
   c = commit -am
   ca = commit --amend
   caa = commit -a --amend
   cv = commit -a --fixup HEAD
   cfx = commit -a --fixup
-  p = pull
-  d = diff
-  ds = "diff --staged"
   xx = clean -fd
   mx = checkout -- .
+  s = status
+  b = branch
   asq = rebase -i --autosquash
+  d = diff
+  ds = diff --staged
+  p = pull
   l = log --color -10 --pretty=format:'%C(yellow)%h%Creset -%C(bold red)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
   ll = log --name-status
   hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short	
@@ -26,7 +26,7 @@
 [push]
 	default = simple
 [pull]
-  ff = only
+  rebase = true
 [core]
 	excludesfile = ~/.gitignore
 	editor = vi
@@ -37,4 +37,5 @@
     cmd = code --wait --diff $LOCAL $REMOTE
 [gpg]
 	program = gpg
-
+[init]
+	defaultBranch = main

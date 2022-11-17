@@ -1,0 +1,43 @@
+# Helpers for Chain4Travel
+WORK_DIR="${HOME}/.shell_ext"
+SCRIPTS_DIR="${WORK_DIR}/camino"
+
+
+export capi_url='http://localhost:9650'
+export ca_username='camino'
+export ca_password='<strong password here>'
+export ca_privkey="PrivateKey-<bc58 priv bytes>"
+
+BHAddr="0x0100000000000000000000000000000000000000"
+IPAddr="0x010000000000000000000000000000000000000c"
+myAddr="0xffCd1238dB10793758c29733e91E784D9bB54651"
+
+function ca-node() {
+  bash "${SCRIPTS_DIR}/run_local_node.sh"
+}
+
+function ca-wipedb() {
+  rm -rf "${HOME}/Proj/camino/camino-node/build/local"
+}
+
+function ca-fund_chains() {
+  bash "${HOME}/.shell_ext/camino/fund_chains.sh"
+}
+
+function ca-initapi() {
+  bash "${HOME}/.shell_ext/camino/init_user_key.sh"
+}
+
+function re() {
+  echo "$(pwd)" | grep "Proj/camino/camino-node" > /dev/null
+  ret=$?
+  if [[ $ret != 0 ]]; then
+    echo "Not in camino-node\ncd ~/Proj/camino/camino-node"
+    return 1
+  fi
+  ca-wipedb
+  rm build/camino-node
+  ./scripts/build.sh
+}
+
+source "${WORK_DIR}/camino_chain_functions.sh"
