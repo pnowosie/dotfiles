@@ -1,13 +1,10 @@
 #!/bin/bash
 source "${HOME}/.shell_ext/camino_chain_functions.sh"
+source "$HOME/.shell_ext/utility.sh"
 
 bech32addr=columbus17pysyr6av4n2gf6teqv3kjd5ewdkmncwrhq6qk
 hexaddr=0xffCd1238dB10793758c29733e91E784D9bB54651
 
-fail() {
-	echo $1;
-	exit 15
-}
 
 get_tx_status() {
 	status=$(cat <<EOT | http --json --body "${capi_url}/ext/bc/X" | jq -r '.result.status'

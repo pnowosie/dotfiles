@@ -28,6 +28,10 @@ function ca-initapi() {
   bash "${HOME}/.shell_ext/camino/init_user_key.sh"
 }
 
+function ca-genesis() {
+  bash "${HOME}/.shell_ext/camino/regenerate_genesis.sh"
+}
+
 function re() {
   echo "$(pwd)" | grep "Proj/camino/camino-node" > /dev/null
   ret=$?

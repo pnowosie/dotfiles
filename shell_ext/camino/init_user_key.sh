@@ -1,9 +1,6 @@
 #!/bin/bash
 
-fail() {
-	echo $1;
-	exit 13
-}
+source "$HOME/.shell_ext/utility.sh"
 
 generate_post_data()
 {
