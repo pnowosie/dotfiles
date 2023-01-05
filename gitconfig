@@ -22,6 +22,8 @@
   hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short	
   whatidid = log --name-status HEAD^..HEAD
   resign = "!re() { git rebase --exec 'git commit --amend --no-edit -n -S' -i $1; }; re"
+  subi = submodule update --init --recursive
+  subx = submodule foreach --recursive git clean -xfd
   
 [push]
 	default = simple
