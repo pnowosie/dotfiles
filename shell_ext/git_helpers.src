@@ -7,6 +7,8 @@ alias gad='git add . ; git status'
 alias masta='git checkout master'
 alias mastaf='git clean -fd && git checkout -f master'
 alias ltee='git l | tee'
+alias shl='git stash list'
+alias shap='git stash apply'
 
 # Branch clean up
 
@@ -114,3 +116,30 @@ function ssh-agent-start() {
   ssh-add "${GITHUB_SSH_KEY_PATH}" 
 }
 
+# Applies a git stash entry and resolve conflict to the applied changes
+# USE WITH CAUTION - will wipe new things out when your entry in stash is old
+function stasio() {
+  stash_id=$1
+  [[ -z "${stash_id}" ]] && stash_id=0
+  git stash apply ${stash_id}
+  if [[ $? != 0 ]]; then
+    echo "we have a conflict! - resolving"
+    git checkout --theirs -- .
+    git add .
+    git restore --staged .
+  fi
+
+  git status
+}
+
+# Helper function to delete old merged tracking local branches
+function drop-old() {
+  git remote prune origin
+
+  git branch --merged | egrep -v "(^\*|master|dev|chain4travel)" > /tmp/merged-branches
+
+  # allow to check & rescue some local branched
+  ${EDITOR} /tmp/merged-branches
+
+  xargs git branch -d < /tmp/merged-branches
+}
