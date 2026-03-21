@@ -1,24 +1,10 @@
-# Default text editor
 export VISUAL=nvim
 export EDITOR=$VISUAL
-
-# Other tools
 export PIPENV_VENV_IN_PROJECT=1
-
-# Aliases
-alias zid="date +'%Y%m%d%H%M'"
-alias v='nvim'
-
-# alias l='exa -1'
-# alias ls='exa'
-# alias ll='exa -l'
-# alias la='exa -la'
-# alias tree='exa -tree'
 
 source "$HOME/.shell_ext/utility.sh"
 
 function runtest {
-    #echo "[DEBUG] Run command: ~$@~"
     "$@"
     local exit_code=$?
     if [ $exit_code -ne 0 ]; then
@@ -35,8 +21,6 @@ mcd () {
     cd "$1"
 }
 
-# import custom aliases
-export ASDF_PYVER=$(asdf current python | tr -s ' ' | cut -d ' ' -f2)
 if [ -f ~/.shell_ext/aliases ]; then
     . ~/.shell_ext/aliases
 fi

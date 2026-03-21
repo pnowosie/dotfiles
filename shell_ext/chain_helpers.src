@@ -1,0 +1,36 @@
+# General-purpose chain & node helpers
+
+## JSON-RPC ##
+
+# Build a JSON-RPC 2.0 request payload
+# Usage: generate_json_rpc_payload <method> [params_json]
+#   params_json defaults to {}
+# Example: generate_json_rpc_payload "eth_getBalance" '["0xABC...", "latest"]'
+generate_json_rpc_payload() {
+  local method="$1"
+  local params="${2:-{\}}"
+  cat <<EOF
+{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"${method}",
+    "params":${params}
+}
+EOF
+}
+
+# Check if a node/service endpoint is reachable
+# Usage: check_node_health <url>
+check_node_health() {
+  curl -sI --connect-timeout 1 "$1" > /dev/null
+  return $?
+}
+
+## EVM helpers (requires Foundry's cast) ##
+
+# Get ETH balance in ether
+# Usage: balEth <address> <rpc_url>
+function balEth() {
+	cast balance --ether --rpc-url $2 $1
+}
+

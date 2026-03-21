@@ -1,0 +1,4 @@
+alias ll="ls -alFh"
+alias drc='docker-compose'
+alias zid="date +'%Y%m%d%H%M'"
+alias v='nvim'

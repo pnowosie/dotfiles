@@ -15,7 +15,7 @@ function say () {
 #> fail "unrecoverable error"
 #> fail "stops with exit_code 5" 5
 fail() {
-    say $REay "$1" >&2
+    say $RED "$1" >&2
     exit ${2:-1}
 }
 
