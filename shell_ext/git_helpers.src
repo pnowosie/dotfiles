@@ -4,17 +4,19 @@ GITHUB_SSH_KEY_PATH="${HOME}/.ssh/id_rsa"
 # Aliases
 alias g=git
 alias gad='git add . ; git status'
-alias masta='git checkout master'
-alias mastaf='git clean -fd && git checkout -f master'
-alias ltee='git l | tee'
+alias masta='git checkout main'
+alias mastaf='git clean -fd && git checkout -f main'
+alias gee='git l | tee'
+alias bee='git b | tee'
 alias shl='git stash list'
 alias shap='git stash apply'
+alias shop='git stash pop'
 
 # Branch clean up
 
 #[DOC]: Deletes local branches which already have been merged
 # You can exclude more patterns by `master|develop|release`
-alias rm-merged='git branch --merged | egrep -v "(^\*|master)" | xargs git branch -d'
+alias rm-merged='git branch --merged | egrep -v "(^\*|main)" | xargs git branch -d'
 
 #[DOC]: Cleans up remote tracking branches
 alias rm-tracking='git remote prune origin'
@@ -30,14 +32,14 @@ function currbranch() {
   local exit_code=$?
   if [ $exit_code -ne 0 ]; then
     return $exit_code;
-  else 
+  else
     echo "$bl" | cut -d ' ' -f2
   fi
 }
 
 # am I on master?
 function onmaster() {
-    [[ $(currbranch) == "master" ]]
+    [[ $(currbranch) == "main" ]]
     return
 }
 
@@ -48,10 +50,10 @@ function rebase() {
         say $BLUE "ready on master"
     else
         branch=$(currbranch)
-        git checkout master
+        git checkout main
         git pull
         git checkout $branch
-        runtest git rebase master
+        runtest git rebase main
     fi
 }
 
@@ -72,7 +74,7 @@ function curr() {
     stan=`git status --ahead-behind`
     echo $stan | grep $uptodate > /dev/null
     local exit_code=$?
- 
+
     if [ $exit_code -eq 0 ]; then
         echo "$fg[white]$uptodate$reset_color"
     else
@@ -89,14 +91,14 @@ function hed() {
 function bb() {
   branch=$(git branch | grep "$1")
   if [[ $? != 0 ]]; then
-    echo "🚫 No branch matching the pattern"
+    echo "No branch matching the pattern"
     return 1
   fi
 
   oneline=$(echo "${branch}" | wc -l | xargs)
   if [[ $oneline != 1 ]]; then
     echo "${branch}"
-    echo "👆 More than one possible branch"
+    echo "More than one possible branch"
     return 2
   fi
 
@@ -107,13 +109,13 @@ function bb() {
   fi
 
   branch=$(echo "${branch}" | xargs)
-  echo "✅ Switching to branch: ${branch}"
+  echo "Switching to branch: ${branch}"
   git checkout ${branch}
 }
 
 function ssh-agent-start() {
   eval "$(ssh-agent -s)"
-  ssh-add "${GITHUB_SSH_KEY_PATH}" 
+  ssh-add "${GITHUB_SSH_KEY_PATH}"
 }
 
 # Applies a git stash entry and resolve conflict to the applied changes
@@ -136,10 +138,64 @@ function stasio() {
 function drop-old() {
   git remote prune origin
 
-  git branch --merged | egrep -v "(^\*|master|dev|chain4travel)" > /tmp/merged-branches
+  git branch --merged | egrep -v "(^\*|main|dev)" > /tmp/merged-branches
 
-  # allow to check & rescue some local branched
+  # allow to check & rescue some local branches
   ${EDITOR} /tmp/merged-branches
 
   xargs git branch -d < /tmp/merged-branches
+}
+
+function get-pr() {
+  pr_id="$1"
+  echo "Fetching branch from PR#${pr_id}"
+  git fetch origin "pull/${pr_id}/head:prs/${pr_id}"
+  git checkout "prs/${pr_id}"
+}
+
+# Fetches the head of upstream:main and updates local copy and origin:main
+function pull-upstream() {
+  echo "Switched to main branch"
+  git checkout main
+  git pull
+
+  echo "Fetched upstream : main"
+  git fetch upstream main
+
+  echo "Update local and origin"
+  git merge --ff-only upstream/main
+  git push origin main
+}
+
+## Git helpers ##
+
+# Append a log line to a file
+# Usage: log_entry <message> <log_file>
+log_entry() {
+    echo "$1" >> "$2"
+}
+
+# Parse git pull output and log a summary
+# Usage: parse_git_output <git_output> <repo_name> <log_file>
+parse_git_output() {
+    local output="$1"
+    local subdir="$2"
+    local log_file="$3"
+
+    log_entry "- $subdir" "$log_file"
+
+    if echo "$output" | grep -q "Updating [a-f0-9]\+\.\.[a-f0-9]\+"; then
+        local update_line=$(echo "$output" | grep "Updating [a-f0-9]\+\.\.[a-f0-9]\+")
+        log_entry "$update_line" "$log_file"
+    fi
+
+    if echo "$output" | grep -q "[0-9]\+ files changed"; then
+        local files_line=$(echo "$output" | grep "[0-9]\+ files changed")
+        log_entry "$files_line" "$log_file"
+    fi
+
+    if echo "$output" | grep -q "Already up to date"; then
+        local current_commit=$(git log --oneline -1)
+        log_entry "Already up to date $current_commit" "$log_file"
+    fi
 }

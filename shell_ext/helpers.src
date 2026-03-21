@@ -4,11 +4,10 @@ export EDITOR=$VISUAL
 
 # Other tools
 export PIPENV_VENV_IN_PROJECT=1
-export ASDF_PYVER=$(asdf current python | tr -s ' ' | cut -d ' ' -f2)
 
 # Aliases
 alias zid="date +'%Y%m%d%H%M'"
-alias vi='nvim'
+alias v='nvim'
 
 # alias l='exa -1'
 # alias ls='exa'
@@ -16,7 +15,6 @@ alias vi='nvim'
 # alias la='exa -la'
 # alias tree='exa -tree'
 
-alias ranger="$HOME/.asdf/installs/python/${ASDF_PYVER}/bin/ranger"
 source "$HOME/.shell_ext/utility.sh"
 
 function runtest {
@@ -38,6 +36,7 @@ mcd () {
 }
 
 # import custom aliases
+export ASDF_PYVER=$(asdf current python | tr -s ' ' | cut -d ' ' -f2)
 if [ -f ~/.shell_ext/aliases ]; then
     . ~/.shell_ext/aliases
 fi
