@@ -1,0 +1,7 @@
+# decide what zshrc includes
+source ~/.shell_ext/helpers.src
+source ~/.shell_ext/git_helpers.src
+source ~/.shell_ext/docker_helpers.src
+source ~/.shell_ext/chain_helpers.src
+source ~/.shell_ext/prompt.src
+

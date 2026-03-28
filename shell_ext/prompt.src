@@ -1,0 +1,6 @@
+#echo "$fg[blue] - Módl się i pracuj! -$reset_color"
+#echo "$fg[green] - Automate everything! -$reset_color"
+echo "$fg[green] - Ciesz się tym co masz! -$reset_color"
+
+
+echo "CHANGE: v ~/.shell_ext/prompt.src"
