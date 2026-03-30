@@ -1,2 +1,19 @@
-.elixir_ls/
+.DS_Store
+._*
+
+.claude/
+.copilot/
+.cursor/
+
+.idea/
 .vscode/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node / Bun
+node_modules/
+.bun/
+

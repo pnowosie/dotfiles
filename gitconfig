@@ -31,7 +31,7 @@
   rebase = true
 [core]
 	excludesfile = ~/.gitignore
-	editor = vi
+	editor = nvim
 
 [diff]
     tool = default-difftool
