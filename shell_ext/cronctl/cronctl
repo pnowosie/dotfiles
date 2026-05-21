@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""
+cronctl — manage remote cron jobs from local JSON definitions.
+
+Usage:
+  cronctl                            list available job names
+  cronctl <name>                     show schedule & whether it is active on VPS
+  cronctl <name> --activate          install/refresh cron block on the VPS
+  cronctl <name> --deactivate        remove cron block from the VPS
+  cronctl <name> --activate --dry-run
+  cronctl <name> --peek              tail the remote log (~½ screen)
+  cronctl -e <name>                  open the job's JSON in $EDITOR
+
+Job files live in ~/.config/cronctl/<name>.json. Schema:
+
+  {
+    "host":    "mikrus",                       SSH host alias
+    "cwd":     "/srv/example/app",             working dir on VPS
+    "command": "<exec> [args...]",             will be prefixed with `cd cwd && `
+    "log":     "logs/foo.log",                 optional, appended as `>> log 2>&1`
+    "check_paths": ["src/jobs/foo.ts"],        optional, validated on VPS at --activate
+    "schedule": {
+        "tz":     "Europe/Warsaw",             defaults to UTC
+        "cron":   "1,31 9-22 * * *"            5-field cron expression, OR
+        "preset": "@daily"                     one of @hourly @daily @monthly @annually @yearly
+    }
+  }
+
+Schedule is interpreted in the configured tz; the hour field is converted
+to UTC at activate time using the *current* offset, so re-activating after
+a DST change refreshes the schedule. Re-activating with no effective change
+is a no-op.
+
+Managed cron entries live between fence markers in the remote crontab —
+everything outside the fences is left untouched.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+JOBS_DIR = Path.home() / ".config" / "cronctl"
+
+OPEN_FMT  = "# >>> cronctl: {name} >>>"
+CLOSE_FMT = "# <<< cronctl: {name} <<<"
+
+PRESETS = {
+    "@hourly":   "0 * * * *",
+    "@daily":    "0 0 * * *",
+    "@monthly":  "0 0 1 * *",
+    "@annually": "0 0 1 1 *",
+    "@yearly":   "0 0 1 1 *",
+}
+
+
+# ─── helpers ────────────────────────────────────────────────────────────────
+
+def die(msg: str, code: int = 1):
+    print(f"cronctl: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def list_jobs() -> None:
+    if not JOBS_DIR.is_dir():
+        die(f"no job dir at {JOBS_DIR}")
+    files = sorted(JOBS_DIR.glob("*.json"))
+    if not files:
+        print(f"cronctl: no job files in {JOBS_DIR}")
+        return
+    for f in files:
+        print(f.stem)
+
+
+def load_job(name: str) -> dict:
+    path = JOBS_DIR / f"{name}.json"
+    if not path.exists():
+        die(f"no such job: {name}  (looked for {path})")
+    try:
+        job = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        die(f"bad JSON in {path}: {e}")
+    for k in ("host", "cwd", "command", "schedule"):
+        if k not in job:
+            die(f"{path}: missing required field '{k}'")
+    return job
+
+
+# ─── schedule rendering ─────────────────────────────────────────────────────
+
+def tz_offset_hours(tz: str) -> int:
+    """Whole-hour offset of `tz` from UTC right now."""
+    off = datetime.now(ZoneInfo(tz)).utcoffset()
+    if off is None:
+        return 0
+    secs = int(off.total_seconds())
+    if secs % 3600 != 0:
+        die(f"timezone {tz!r} has non-whole-hour offset; not supported")
+    return secs // 3600
+
+
+def _expand_range(a: int, b: int) -> list[int]:
+    if a <= b:
+        return list(range(a, b + 1))
+    return list(range(a, 24)) + list(range(0, b + 1))
+
+
+def _compress(items: list[int]) -> str:
+    if not items:
+        return ""
+    items = sorted(set(items))
+    runs: list[tuple[int, int]] = []
+    start = prev = items[0]
+    for x in items[1:]:
+        if x == prev + 1:
+            prev = x
+        else:
+            runs.append((start, prev))
+            start = prev = x
+    runs.append((start, prev))
+    return ",".join(f"{a}" if a == b else f"{a}-{b}" for a, b in runs)
+
+
+def shift_hour_field(spec: str, offset: int) -> str:
+    spec = spec.strip()
+    if spec == "*" or "/" in spec:
+        return spec
+    items: list[int] = []
+    for tok in spec.split(","):
+        tok = tok.strip()
+        if "-" in tok:
+            a, b = tok.split("-", 1)
+            items.extend(_expand_range(int(a), int(b)))
+        else:
+            items.append(int(tok))
+    return _compress([(h - offset) % 24 for h in items])
+
+
+def expand_schedule(sched: dict) -> tuple[str, int, str, str]:
+    """Return (utc_cron, offset, tz, source). `source` is the human-readable original."""
+    tz = sched.get("tz", "UTC")
+    preset = sched.get("preset")
+    cron = sched.get("cron")
+    if preset and cron:
+        die("schedule: set either 'preset' or 'cron', not both")
+    if not preset and not cron:
+        die("schedule: requires 'preset' or 'cron'")
+    if preset:
+        if preset not in PRESETS:
+            die(f"unknown preset: {preset}  (allowed: {', '.join(sorted(PRESETS))})")
+        source = preset
+        cron = PRESETS[preset]
+    else:
+        source = cron  # type: ignore[assignment]
+    fields = cron.split()  # type: ignore[union-attr]
+    if len(fields) != 5:
+        die(f"cron expression must have 5 fields, got: {cron!r}")
+    off = tz_offset_hours(tz) if tz != "UTC" else 0
+    fields[1] = shift_hour_field(fields[1], off)
+    # Sanity warning: monthly/annual TZ-shift across day boundary is ambiguous.
+    if preset in ("@monthly", "@annually", "@yearly") and off != 0:
+        sys.stderr.write(
+            f"cronctl: warning — preset {preset} with tz={tz} (offset {off:+d}h) "
+            f"may fire on the wrong day; cron has no clean way to shift day-of-month.\n"
+        )
+    return " ".join(fields), off, tz, source
+
+
+def render_command(job: dict) -> str:
+    parts = [f"cd {job['cwd']} &&", job["command"]]
+    log = job.get("log")
+    if log:
+        parts.append(f">> {log} 2>&1")
+    return " ".join(parts)
+
+
+def render_block(name: str, job: dict) -> str:
+    cron, off, tz, _source = expand_schedule(job["schedule"])
+    cmd = render_command(job)
+    return (
+        f"{OPEN_FMT.format(name=name)}\n"
+        f"# tz={tz} (offset {off:+d}h from UTC at last activate)\n"
+        f"{cron} {cmd}\n"
+        f"{CLOSE_FMT.format(name=name)}\n"
+    )
+
+
+def _block_re(name: str) -> re.Pattern[str]:
+    op = re.escape(OPEN_FMT.format(name=name))
+    cl = re.escape(CLOSE_FMT.format(name=name))
+    return re.compile(rf"^{op}\n.*?^{cl}\n?", re.MULTILINE | re.DOTALL)
+
+
+# ─── SSH ────────────────────────────────────────────────────────────────────
+
+def ssh_run(host: str, remote_cmd: str, *, input_: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["ssh", host, remote_cmd],
+        input=input_, text=True, capture_output=True,
+    )
+
+
+def read_remote_crontab(host: str) -> str:
+    r = ssh_run(host, "crontab -l")
+    if r.returncode != 0:
+        if "no crontab" in (r.stderr or "").lower():
+            return ""
+        die(f"ssh {host}: {r.stderr.strip() or 'crontab -l failed'}")
+    return r.stdout
+
+
+def write_remote_crontab(host: str, content: str) -> None:
+    r = ssh_run(host, "crontab -", input_=content)
+    if r.returncode != 0:
+        die(f"ssh {host} crontab -: {r.stderr.strip() or 'failed'}")
+
+
+def validate_remote(job: dict) -> None:
+    cwd = job["cwd"]
+    exec_token = shlex.split(job["command"])[0]
+    parts = [f"test -d {shlex.quote(cwd)} || {{ echo 'missing cwd: {cwd}'; exit 2; }}"]
+    if exec_token.startswith("/"):
+        parts.append(
+            f"test -x {shlex.quote(exec_token)} || "
+            f"{{ echo 'exec not executable: {exec_token}'; exit 2; }}"
+        )
+    else:
+        parts.append(
+            f"command -v {shlex.quote(exec_token)} >/dev/null 2>&1 || "
+            f"{{ echo 'exec not found in PATH: {exec_token}'; exit 2; }}"
+        )
+    for p in job.get("check_paths", []):
+        full = os.path.join(cwd, p)
+        parts.append(
+            f"test -e {shlex.quote(full)} || "
+            f"{{ echo 'missing: {full}'; exit 2; }}"
+        )
+    r = ssh_run(job["host"], " && ".join(parts))
+    if r.returncode != 0:
+        out = (r.stdout or r.stderr).strip()
+        die(f"validation on {job['host']} failed: {out or 'unknown error'}")
+
+
+# ─── commands ───────────────────────────────────────────────────────────────
+
+def cmd_show(name: str, job: dict) -> None:
+    cron, off, tz, source = expand_schedule(job["schedule"])
+    print(f"job:       {name}")
+    print(f"host:      {job['host']}")
+    print(f"cwd:       {job['cwd']}")
+    print(f"command:   {job['command']}")
+    if job.get("log"):
+        print(f"log:       {job['log']}")
+    print(f"schedule:  {source}   (tz={tz}, offset {off:+d}h)")
+    print(f"as UTC:    {cron}")
+    ct = read_remote_crontab(job["host"])
+    m = _block_re(name).search(ct)
+    if m:
+        print("status:    active")
+        print("─── live block on VPS " + "─" * 39)
+        print(m.group(0).rstrip())
+        print("─" * 60)
+    else:
+        print("status:    inactive")
+
+
+def cmd_activate(name: str, job: dict, dry_run: bool) -> None:
+    validate_remote(job)
+    desired = render_block(name, job)
+    ct = read_remote_crontab(job["host"])
+    m = _block_re(name).search(ct)
+    if m:
+        if m.group(0) == desired:
+            print(f"cronctl: '{name}' already up to date on {job['host']} — no change.")
+            return
+        new = ct[: m.start()] + desired + ct[m.end():]
+        verb = "would update" if dry_run else "updated"
+    else:
+        sep = "" if (not ct or ct.endswith("\n")) else "\n"
+        new = ct + sep + "\n" + desired
+        verb = "would add" if dry_run else "added"
+    if dry_run:
+        print(f"cronctl: '{name}' {verb} on {job['host']} — block:")
+        print("─" * 60)
+        print(desired, end="")
+        print("─" * 60)
+        return
+    write_remote_crontab(job["host"], new)
+    print(f"cronctl: '{name}' {verb} on {job['host']}.")
+
+
+def cmd_edit(name: str) -> None:
+    path = JOBS_DIR / f"{name}.json"
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
+    if not path.exists():
+        print(f"cronctl: '{name}' does not exist yet — opening new file at {path}")
+    cmd = shlex.split(editor) + [str(path)]
+    os.execvp(cmd[0], cmd)
+
+
+def cmd_peek(name: str, job: dict) -> None:
+    log = job.get("log")
+    if not log:
+        die(f"job '{name}' has no 'log' field — nothing to peek")
+    rows = shutil.get_terminal_size((80, 24)).lines
+    n = max(5, rows // 2 - 3)
+    log_path = log if os.path.isabs(log) else os.path.join(job["cwd"], log)
+    r = ssh_run(job["host"], f"tail -n {n} {shlex.quote(log_path)}")
+    if r.returncode != 0:
+        die(f"ssh {job['host']}: {r.stderr.strip() or 'tail failed'}")
+    header = f"─── tail -n {n} {log_path}  @{job['host']} "
+    print(header + "─" * max(3, 60 - len(header)))
+    sys.stdout.write(r.stdout)
+    if r.stdout and not r.stdout.endswith("\n"):
+        sys.stdout.write("\n")
+    print("─" * 60)
+
+
+def cmd_deactivate(name: str, job: dict, dry_run: bool) -> None:
+    ct = read_remote_crontab(job["host"])
+    m = _block_re(name).search(ct)
+    if not m:
+        print(f"cronctl: '{name}' is not active on {job['host']} — no change.")
+        return
+    if dry_run:
+        print(f"cronctl: '{name}' would be removed from {job['host']}.")
+        return
+    new = ct[: m.start()] + ct[m.end():]
+    write_remote_crontab(job["host"], new)
+    print(f"cronctl: '{name}' removed from {job['host']}.")
+
+
+# ─── CLI ────────────────────────────────────────────────────────────────────
+
+def main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(
+        prog="cronctl",
+        description="manage remote cron jobs from JSON definitions in ~/.cronctl/",
+    )
+    p.add_argument("name", nargs="?",
+                   help="job name (filename in ~/.cronctl/, without .json)")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--activate", action="store_true")
+    g.add_argument("--deactivate", action="store_true")
+    g.add_argument("-e", "--edit", action="store_true",
+                   help="open the job's JSON file in $EDITOR")
+    g.add_argument("-p", "--peek", action="store_true",
+                   help="tail the remote log file (~½ screen)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="preview changes without modifying remote crontab")
+    args = p.parse_args(argv)
+
+    if not args.name:
+        if args.activate or args.deactivate or args.edit or args.peek:
+            die("this flag requires a job name")
+        list_jobs()
+        return 0
+
+    if args.edit:
+        cmd_edit(args.name)
+        return 0  # not reached: execvp replaces the process
+
+    job = load_job(args.name)
+    if args.activate:
+        cmd_activate(args.name, job, args.dry_run)
+    elif args.deactivate:
+        cmd_deactivate(args.name, job, args.dry_run)
+    elif args.peek:
+        cmd_peek(args.name, job)
+    else:
+        cmd_show(args.name, job)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
