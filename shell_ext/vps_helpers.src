@@ -1,0 +1,77 @@
+# VPS resource snapshot helpers
+
+# Quick CPU / RAM / disk / Docker snapshot from a remote host over SSH.
+# Defaults to the `mikrus` SSH alias; pass any ssh target as $1.
+#   vps-usage
+#   vps-usage seoho
+#   vps-usage user@host.example
+#
+# Remote side uses only /proc, free, df, du, ps, and (optionally) docker —
+# nothing to install. Docker section is skipped silently if not present.
+vps-usage() {
+  local target="${1:-mikrus}"
+  say $BLUE "==> vps-usage against ${target}"
+  ssh -T "$target" 'bash -s' <<'REMOTE'
+set -u
+
+hostline=$(hostname -f 2>/dev/null || hostname)
+date_iso=$(date -Iseconds 2>/dev/null || date)
+printf '=== %s @ %s ===\n' "$hostline" "$date_iso"
+
+if [ -r /proc/uptime ]; then
+  up_s=$(awk '{print int($1)}' /proc/uptime)
+  printf 'uptime: %dd %dh %dm\n' \
+    $((up_s/86400)) $(( (up_s%86400)/3600 )) $(( (up_s%3600)/60 ))
+fi
+printf 'kernel: %s\n' "$(uname -sr)"
+
+# ---- CPU ----
+printf '\n== CPU ==\n'
+cores=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo)
+printf 'cores (cgroup view): %s\n' "$cores"
+[ -r /proc/loadavg ] && \
+  printf 'load avg (1/5/15): %s\n' "$(awk '{print $1" / "$2" / "$3}' /proc/loadavg)"
+
+if [ -r /proc/stat ]; then
+  read -r _ cu1 cn1 cs1 ci1 cio1 _ < /proc/stat
+  sleep 1
+  read -r _ cu2 cn2 cs2 ci2 cio2 _ < /proc/stat
+  d_user=$(( (cu2-cu1) + (cn2-cn1) ))
+  d_sys=$(( cs2-cs1 ))
+  d_idle=$(( (ci2-ci1) + (cio2-cio1) ))
+  awk -v u=$d_user -v s=$d_sys -v i=$d_idle -v t=$((d_user+d_sys+d_idle)) \
+    'BEGIN{ if (t>0) printf "cpu (1s sample): user=%.1f%% sys=%.1f%% idle=%.1f%%\n", \
+      u*100/t, s*100/t, i*100/t }'
+fi
+
+# ---- Memory ----
+printf '\n== Memory ==\n'
+free -h
+
+# ---- Disk ----
+printf '\n== Disk ==\n'
+df -hT -x tmpfs -x devtmpfs -x overlay -x squashfs 2>/dev/null \
+  | awk 'NR==1 || $NF=="/" || $NF ~ /^\/(home|root|services|var|data|mnt|srv)/'
+
+for base in /root /home/*; do
+  [ -d "$base/services" ] || continue
+  printf '\n~/services in %s (top 8):\n' "$base"
+  du -sh "$base"/services/* 2>/dev/null | sort -hr | head -8
+done
+
+# ---- Top processes by RSS ----
+printf '\n== Top 8 by RSS ==\n'
+ps -eo pid,user,rss,pcpu,comm --sort=-rss 2>/dev/null | head -9 \
+  | awk 'NR==1{printf "%-7s %-10s %10s %6s  %s\n",$1,$2,"RSS_MB","%CPU",$5; next}
+         {printf "%-7s %-10s %10.1f %6s  %s\n",$1,$2,$3/1024,$4,$5}'
+
+# ---- Docker ----
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  printf '\n== Docker containers ==\n'
+  docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+  printf '\n-- stats (instant) --\n'
+  docker stats --no-stream --format \
+    'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}\t{{.BlockIO}}'
+fi
+REMOTE
+}
