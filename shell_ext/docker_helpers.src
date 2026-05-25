@@ -2,3 +2,38 @@
 function dockerbash() {
   docker exec -it "$1" bash
 }
+
+# Return 0 if a container with the given name is currently running.
+# Usage: container-running <name>
+container-running() {
+  local name="$1"
+  [[ -n "$name" ]] || { print -u2 "usage: container-running <name>"; return 2; }
+  [[ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" == "true" ]]
+}
+
+# - If already running: no-op.
+# - If stopped but exists: docker start.
+# - If absent: docker run, re-attaching the minio-data volume if it
+#   already exists, otherwise creating it fresh.
+# Data lives in the named volume ($name-data), so 'docker rm minio'
+# does not delete it — only 'docker volume rm $name-data' does.
+start-s3() {
+  local name=local-s3
+  if container-running "$name"; then
+    echo "$name: already running"
+    return 0
+  fi
+  if docker inspect "$name" >/dev/null 2>&1; then
+    echo "$name: starting existing container"
+    docker start "$name" >/dev/null
+    return
+  fi
+  echo "$name: creating new container with volume minio-data"
+  docker run -d --name "$name" \
+    -p 9000:9000 -p 9001:9001 \
+    -e MINIO_ROOT_USER=${MINIO_LOCAL_S3_USER} \
+    -e MINIO_ROOT_PASSWORD=${MINIO_LOCAL_S3_PASS} \
+    -v $name-data:/data \
+    minio/minio server /data --console-address ":9001"
+}
+
