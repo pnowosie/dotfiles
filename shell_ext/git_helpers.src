@@ -4,8 +4,7 @@ GITHUB_SSH_KEY_PATH="${HOME}/.ssh/id_rsa"
 # Aliases
 alias g=git
 alias gad='git add . ; git status'
-alias masta='git checkout main'
-alias mastaf='git clean -fd && git checkout -f main'
+# masta / mastap are functions (see below) -- they detect main vs master
 alias gee='git l | tee'
 alias bee='git b | tee'
 alias shl='git stash list'
@@ -15,8 +14,7 @@ alias shop='git stash pop'
 # Branch clean up
 
 #[DOC]: Deletes local branches which already have been merged
-# You can exclude more patterns by `master|develop|release`
-alias rm-merged='git branch --merged | egrep -v "(^\*|main)" | xargs git branch -d'
+alias rm-merged='merged-branches | xargs git branch -d'
 
 #[DOC]: Cleans up remote tracking branches
 alias rm-tracking='git remote prune origin'
@@ -26,41 +24,78 @@ alias rm-tracking='git remote prune origin'
 
 # Functions
 
+#[DOC]: Prints the checked out branch (empty when HEAD is detached)
 function currbranch() {
-  bl=`git branch | grep \*`
-
-  local exit_code=$?
-  if [ $exit_code -ne 0 ]; then
-    return $exit_code;
-  else
-    echo "$bl" | cut -d ' ' -f2
-  fi
+  git branch --show-current
 }
 
-# am I on master?
+#[DOC]: Prints this repo's default branch - main or master, whichever exists
+function mainbranch() {
+  git branch --format='%(refname:short)' | grep -m1 -E '^(main|master)$'
+}
+
+#[DOC]: Checks out the default branch; extra args go to git checkout
+function masta() {
+  local branch
+  branch=$(mainbranch) || {
+    say $RED "Neither main nor master here" >&2
+    return 1
+  }
+  git checkout "$@" "$branch"
+}
+
+#[DOC]: masta + git pull
+function mastap() {
+  masta && git pull
+}
+
+#[DOC]: Throws away local changes and jumps to the default branch
+function mastaf() {
+  git clean -fd && masta -f
+}
+
+#[DOC]: Starts a task branch off a fresh default branch
+#> jira SUP-8400
+#> jira https://invia.atlassian.net/browse/SUP-8400
+function jira() {
+  local id
+  id=$(echo "$1" | grep -oiE 'SUP-[0-9]+' | tr '[:lower:]' '[:upper:]')
+  [[ -z "$id" ]] && {
+    say $RED "Need a SUP ticket id or url, e.g. SUP-8400" >&2
+    return 1
+  }
+
+  mastap && git checkout -b "$id"
+}
+
+#[DOC]: Am I on the default branch?
 function onmaster() {
-    [[ $(currbranch) == "main" ]]
-    return
+    local main
+    main=$(mainbranch) || return 1
+    [[ "$(currbranch)" == "$main" ]]
 }
 
-# std rebase feature branch onto master or just git pull on master
+# std rebase feature branch onto the default branch, or just pull when on it
 function rebase() {
+    local main
+    main=$(mainbranch) || return 1
+
     if onmaster; then
         git pull
-        say $BLUE "ready on master"
+        say $BLUE "ready on ${main}"
     else
+        local branch
         branch=$(currbranch)
-        git checkout main
-        git pull
-        git checkout $branch
-        runtest git rebase main
+        mastap || return 1
+        git checkout "$branch"
+        runtest git rebase "$main"
     fi
 }
 
 # Updates (resets) to the remote upstream branch potencially loosing local history
 function reset-to-upstream() {
     if onmaster; then
-        say $RED "don't hard-reset MASTER, please!"
+        say $RED "don't hard-reset $(mainbranch), please!"
     else
         git fetch --all
         git reset --hard origin/$(currbranch)
@@ -69,16 +104,15 @@ function reset-to-upstream() {
 
 # check whether working copy is up to date with upstream
 function curr() {
-    uptodate="Your branch is up to date"
+    local uptodate="Your branch is up to date"
     git fetch
-    stan=`git status --ahead-behind`
-    echo $stan | grep $uptodate > /dev/null
-    local exit_code=$?
 
-    if [ $exit_code -eq 0 ]; then
-        echo "$fg[white]$uptodate$reset_color"
+    local stan
+    stan=$(git status --ahead-behind)
+    if echo "$stan" | grep -q "$uptodate"; then
+        say $GREEN "$uptodate"
     else
-        echo $stan
+        echo "$stan"
     fi
 }
 
@@ -89,28 +123,27 @@ function hed() {
 
 # switch branch based on part of the name
 function bb() {
-  branch=$(git branch | grep "$1")
-  if [[ $? != 0 ]]; then
-    echo "No branch matching the pattern"
+  local branch
+  branch=$(git branch --format='%(refname:short)' | grep "$1")
+
+  if [[ -z "$branch" ]]; then
+    say $RED "No branch matching the pattern" >&2
     return 1
   fi
 
-  oneline=$(echo "${branch}" | wc -l | xargs)
-  if [[ $oneline != 1 ]]; then
-    echo "${branch}"
-    echo "More than one possible branch"
+  if [[ $(echo "$branch" | wc -l) -ne 1 ]]; then
+    echo "$branch"
+    say $RED "More than one possible branch" >&2
     return 2
   fi
 
-  echo "${branch}" | grep "*"
-  if [[ $? == 0 ]]; then
-    echo "Already current branch"
-    return
+  if [[ "$branch" == "$(currbranch)" ]]; then
+    say $BLUE "Already current branch"
+    return 0
   fi
 
-  branch=$(echo "${branch}" | xargs)
   echo "Switching to branch: ${branch}"
-  git checkout ${branch}
+  git checkout "$branch"
 }
 
 function ssh-agent-start() {
@@ -134,11 +167,20 @@ function stasio() {
   git status
 }
 
+#[DOC]: Merged local branches, minus the current one and main/master/dev
+# You can exclude more patterns by adding to the last grep
+function merged-branches() {
+  git branch --merged \
+    | grep -v '^\*' \
+    | tr -d ' ' \
+    | grep -vE '^(main|master|dev)$'
+}
+
 # Helper function to delete old merged tracking local branches
 function drop-old() {
   git remote prune origin
 
-  git branch --merged | egrep -v "(^\*|main|dev)" > /tmp/merged-branches
+  merged-branches > /tmp/merged-branches
 
   # allow to check & rescue some local branches
   ${EDITOR} /tmp/merged-branches
@@ -153,18 +195,19 @@ function get-pr() {
   git checkout "prs/${pr_id}"
 }
 
-# Fetches the head of upstream:main and updates local copy and origin:main
+# Fetches the head of upstream's default branch and updates local copy and origin
 function pull-upstream() {
-  echo "Switched to main branch"
-  git checkout main
-  git pull
+  local main
+  main=$(mainbranch) || return 1
 
-  echo "Fetched upstream : main"
-  git fetch upstream main
+  mastap || return 1
+
+  echo "Fetched upstream : ${main}"
+  git fetch upstream "$main"
 
   echo "Update local and origin"
-  git merge --ff-only upstream/main
-  git push origin main
+  git merge --ff-only "upstream/${main}"
+  git push origin "$main"
 }
 
 ## Git helpers ##
